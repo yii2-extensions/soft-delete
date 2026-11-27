@@ -26,3 +26,4 @@ jobs:
       composer-command: update --with yiisoft/yii2:${{ matrix.yii }}
       concurrency-group: phpstan-${{ matrix.yii }}-${{ github.workflow }}-${{ github.ref }}
       extensions: bcmath, dom, intl, mbstring, openssl, sodium, pdo_sqlite, zip
+      ignore-platform-reqs-php-version: "[8.6]"
