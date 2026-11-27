@@ -1,0 +1,43 @@
+---
+on:
+  pull_request: &ignore-paths
+    paths-ignore:
+      - ".gitattributes"
+      - ".gitignore"
+      - "CHANGELOG.md"
+      - "docs/**"
+      - "README.md"
+
+  push: *ignore-paths
+
+name: build-mysql
+
+permissions:
+  contents: read
+
+jobs:
+  mysql:
+    name: MySQL tests with Yii ${{ matrix.yii }}.
+    strategy:
+      fail-fast: false
+      matrix:
+        yii: ["2.0.55", "22.0.x-dev"]
+    uses: yii2-framework/actions/.github/workflows/phpunit-database.yml@1a1132f393d2572abaf9cc1fe75c5c86fce8c211 # v2.0.8
+    with:
+      composer-command: require yiisoft/yii2:${{ matrix.yii }}
+      concurrency-group: mysql-${{ matrix.yii }}-${{ github.ref }}
+      coverage-driver: none
+      database-env: |
+        {
+          "MYSQL_DATABASE": "yiitest",
+          "MYSQL_ROOT_PASSWORD": "root"
+        }
+      database-health-cmd: "mysqladmin ping -h 127.0.0.1 --silent"
+      database-image: mysql
+      database-port: 3306
+      database-type: mysql
+      database-versions: '["8.0", "8.4", "latest"]'
+      extensions: dom, mbstring, pdo_mysql, pdo_sqlite, sodium
+      ignore-platform-reqs-php-version: "[8.6]"
+      php-version: "[8.3, 8.6]"
+      phpunit-group: mysql

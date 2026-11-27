@@ -1,0 +1,4 @@
+interface:
+  display_name: "Yii2 Soft Delete"
+  short_description: "Configure soft deletes, restores and query scopes"
+  default_prompt: "Use $yii2-soft-delete to add an archive and restore workflow to a Yii ActiveRecord model without making ordinary delete soft."
