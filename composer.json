@@ -1,24 +1,28 @@
 {
-    "name": "yii2-extensions/template",
-    "type": "library",
-    "description": "_____",
-    "homepage": "https://yii2-framework.github.io/docs/extensions/template/",
+    "name": "yii2-extensions/soft-delete",
+    "type": "yii2-extension",
+    "description": "Soft deletion and restoration for Yii2 ActiveRecord",
+    "homepage": "https://yii2-framework.github.io/docs/extensions/soft-delete/",
     "keywords": [
-        "_____"
+        "activerecord",
+        "soft-delete",
+        "yii2"
     ],
     "license": "BSD-3-Clause",
     "support": {
-        "docs": "https://yii2-framework.github.io/docs/extensions/template/",
-        "issues": "https://github.com/yii2-extensions/template/issues",
-        "source": "https://github.com/yii2-extensions/template"
+        "docs": "https://yii2-framework.github.io/docs/extensions/soft-delete/",
+        "issues": "https://github.com/yii2-extensions/soft-delete/issues",
+        "source": "https://github.com/yii2-extensions/soft-delete"
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
         "php": ">=8.3",
-        "yiisoft/yii2": "^22.0@dev"
+        "ext-filter": "*",
+        "yiisoft/yii2": "~2.0.55 || ^22.0@dev"
     },
     "require-dev": {
+        "ext-pdo_sqlite": "*",
         "infection/infection": "^0.35",
         "maglnet/composer-require-checker": "^4.1",
         "php-forge/coding-standard": "^0.3",
@@ -30,17 +34,17 @@
     },
     "autoload": {
         "psr-4": {
-            "yii\\template\\": "src"
+            "yii2\\extensions\\softdelete\\": "src"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "yii\\template\\tests\\": "tests"
+            "yii2\\extensions\\softdelete\\tests\\": "tests"
         }
     },
     "extra": {
         "branch-alias": {
-            "dev-main": "1.0.x-dev"
+            "dev-main": "0.1.x-dev"
         }
     },
     "config": {
@@ -54,56 +58,36 @@
     "scripts": {
         "actionlint": "actionlint",
         "check-dependencies": "composer-require-checker check",
-        "codespell": "codespell --config .github/linters/.codespellrc",
         "ecs": "ecs check --fix",
         "ecs-check": "ecs check --ansi",
-        "editorconfig-checker": "editorconfig-checker -config .github/linters/.editorconfig-checker.json",
-        "gitleaks": "gitleaks git --config .github/linters/.gitleaks.toml --redact",
-        "markdownlint": "markdownlint-cli2 --config .github/linters/.markdown-lint.yml '**/*.md'",
         "mutation": [
             "Composer\\Config::disableProcessTimeout",
             "@php -d memory_limit=-1 vendor/bin/infection"
         ],
         "mutation-static": "@mutation --static-analysis-tool=phpstan",
-        "prettier": "prettier --check --config .prettierrc.json --ignore-path .prettierignore '**/*.md' '**/*.{yml,yaml}'",
-        "quality": [
-            "@actionlint",
-            "@codespell",
-            "@editorconfig-checker",
-            "@markdownlint",
-            "@prettier",
-            "@yamllint"
-        ],
         "rector": "rector process",
         "rector-check": "rector process --dry-run",
-        "security": [
-            "@zizmor",
-            "@gitleaks"
-        ],
         "static": "phpstan --memory-limit=-1",
-        "tests": "phpunit",
-        "yamllint": "yamllint -c .github/linters/.yamllint.yml .github",
+        "tests": "phpunit --group=sqlite",
         "zizmor": "zizmor --persona=pedantic .github"
     },
     "scripts-descriptions": {
         "actionlint": "Lints GitHub Actions workflows with actionlint.",
         "check-dependencies": "Verifies that used symbols are declared as Composer dependencies.",
-        "codespell": "Checks spelling with codespell.",
         "ecs": "Applies coding standard fixes with ECS.",
         "ecs-check": "Checks coding standards with ECS without modifying files.",
-        "editorconfig-checker": "Checks files against the EditorConfig rules.",
-        "gitleaks": "Scans Git history for secrets with Gitleaks.",
-        "markdownlint": "Lints Markdown files with markdownlint-cli2.",
         "mutation": "Runs mutation testing with Infection.",
         "mutation-static": "Runs mutation testing with Infection and PHPStan static analysis.",
-        "prettier": "Checks Markdown and YAML formatting with Prettier.",
-        "quality": "Runs all repository quality checks.",
         "rector": "Applies automated refactoring with Rector.",
         "rector-check": "Previews Rector refactoring without modifying files.",
-        "security": "Runs the workflow security and secret scanning checks.",
         "static": "Runs static analysis with PHPStan.",
-        "tests": "Runs PHPUnit.",
-        "yamllint": "Lints YAML files with yamllint.",
+        "tests": "Runs PHPUnit with the sqlite group.",
         "zizmor": "Audits GitHub Actions workflows with zizmor."
-    }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://asset-packagist.org"
+        }
+    ]
 }

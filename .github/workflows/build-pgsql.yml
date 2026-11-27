@@ -1,0 +1,44 @@
+---
+on:
+  pull_request: &ignore-paths
+    paths-ignore:
+      - ".gitattributes"
+      - ".gitignore"
+      - "CHANGELOG.md"
+      - "docs/**"
+      - "README.md"
+
+  push: *ignore-paths
+
+name: build-pgsql
+
+permissions:
+  contents: read
+
+jobs:
+  pgsql:
+    name: PostgreSQL tests with Yii ${{ matrix.yii }}.
+    strategy:
+      fail-fast: false
+      matrix:
+        yii: ["2.0.55", "22.0.x-dev"]
+    uses: yii2-framework/actions/.github/workflows/phpunit-database.yml@1a1132f393d2572abaf9cc1fe75c5c86fce8c211 # v2.0.8
+    with:
+      composer-command: require yiisoft/yii2:${{ matrix.yii }}
+      concurrency-group: pgsql-${{ matrix.yii }}-${{ github.ref }}
+      coverage-driver: none
+      database-env: |
+        {
+          "POSTGRES_DB": "yiitest",
+          "POSTGRES_USER": "root",
+          "POSTGRES_PASSWORD": "root"
+        }
+      database-health-cmd: "pg_isready -h 127.0.0.1 -U root -d yiitest"
+      database-image: postgres
+      database-port: 5432
+      database-type: pgsql
+      database-versions: '["15", "16", "17"]'
+      extensions: dom, mbstring, pdo_pgsql, pdo_sqlite, sodium
+      ignore-platform-reqs-php-version: "[8.6]"
+      php-version: "[8.3, 8.6]"
+      phpunit-group: pgsql

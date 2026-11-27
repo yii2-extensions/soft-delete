@@ -17,8 +17,17 @@ permissions:
 
 jobs:
   phpunit:
-    uses: yii2-framework/actions/.github/workflows/phpunit.yml@7a2d60325d59c5c9377fd445c912f2f1bfacf9d9 # v2.0.2
+    name: PHPUnit tests with Yii ${{ matrix.yii }}.
+    strategy:
+      fail-fast: false
+      matrix:
+        yii: ["2.0.55", "22.0.x-dev"]
+    uses: yii2-framework/actions/.github/workflows/phpunit.yml@1a1132f393d2572abaf9cc1fe75c5c86fce8c211 # v2.0.8
     with:
-      php-version: '["8.3","8.4","8.5"]'
+      composer-command: require yiisoft/yii2:${{ matrix.yii }}
+      concurrency-group: phpunit-${{ matrix.yii }}-${{ github.workflow }}-${{ github.ref }}
+      extensions: bcmath, dom, intl, mbstring, openssl, sodium, pdo_sqlite, zip
+      ignore-platform-reqs-php-version: "[8.6]"
+      phpunit-group: sqlite
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
