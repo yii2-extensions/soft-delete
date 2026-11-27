@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 0.1.1 Under development
 
 - chore: remove unnecessary permissions and secrets from security workflow.
+- chore: update workflow configurations for dependency checks and coding standards.
 
 ## 0.1.0 November 27, 2026
 
