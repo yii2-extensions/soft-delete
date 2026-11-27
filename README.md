@@ -173,8 +173,8 @@ of a page by appending `index.md` to its URL. The
 [AI agents guide](https://yii2-framework.github.io/docs/project/ai-agents/) covers skill installation, client setup and
 verification.
 
-- 🤖 [`yii2-soft-delete` skill](https://github.com/yii2-extensions/soft-delete/blob/main/docs/agents.md): deletion markers,
-  query scopes, restoration, and foreign-key fallback.
+- 🤖 [`yii2-soft-delete` skill](https://github.com/yii2-extensions/soft-delete/blob/main/docs/agents.md): deletion
+  markers, query scopes, restoration, and foreign-key fallback.
 - 🧭 [`yii2-framework` skill](https://yii2-framework.github.io/docs/guide/skills/yii2-framework/): Yii 22.0 application
   conventions.
 

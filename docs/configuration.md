@@ -57,9 +57,9 @@ entry, `'ORA-00001: unique constraint'`, so add the new key to the existing map 
 and restoration keep Yii's configured transaction policy. A veto returns `false`; an unsaved record or a write affecting
 zero rows returns `0` and emits no success event. When the operation rolls back its own transaction or savepoint,
 including a transaction whose commit fails, the model returns to its state before the call. Inside an existing
-transaction a successful operation only releases its savepoint: if that outer transaction rolls back later, the model
-is not restored, so reload it before using it again. A constraint checked at commit, such as a deferred foreign key,
-raises the driver's exception and does not trigger the fallback.
+transaction a successful operation only releases its savepoint: if that outer transaction rolls back later, the model is
+not restored, so reload it before using it again. A constraint checked at commit, such as a deferred foreign key, raises
+the driver's exception and does not trigger the fallback.
 
 A model whose loaded values already equal the target values is not written: `softDelete()` and `restore()` return `0`
 and the model keeps those values. As with Yii's `update()`, the stored row is not read again and the optimistic lock is
