@@ -14,7 +14,7 @@ use yii2\extensions\softdelete\tests\DeleteBehaviorTest;
 final class DeleteBehaviorProvider
 {
     /**
-     * @return array<string, array{Closure(Item): (int|false)}>
+     * @return array<string, array{Closure(Item): (false|int)}>
      */
     public static function transitions(): array
     {
@@ -25,7 +25,7 @@ final class DeleteBehaviorProvider
     }
 
     /**
-     * @return array<string, array{Closure(Item): (int|false), bool}>
+     * @return array<string, array{Closure(Item): (false|int), bool}>
      */
     public static function transitionsWithTargetMarker(): array
     {

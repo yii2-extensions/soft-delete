@@ -13,9 +13,9 @@ use yii2\extensions\softdelete\DeleteBehavior;
  * @property bool $isDeleted
  * @property int $deletedAt
  * @property int $version
- * @method int|false softDelete()
- * @method int|false restore()
- * @method int|false safeDelete()
+ * @method false|int softDelete()
+ * @method false|int restore()
+ * @method false|int safeDelete()
  */
 class VersionedItem extends ActiveRecord
 {

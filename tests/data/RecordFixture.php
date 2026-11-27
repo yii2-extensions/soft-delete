@@ -21,7 +21,7 @@ trait RecordFixture
     }
 
     /**
-     * @param int|array<string, int> $condition
+     * @param array<string, int>|int $condition
      */
     public static function requireOne(int|array $condition): static
     {

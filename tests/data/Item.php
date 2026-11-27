@@ -17,9 +17,9 @@ use yii2\extensions\softdelete\DeleteBehavior;
  * @property int|null $version
  *
  * @property Category|null $category
- * @method int|false softDelete()
- * @method int|false restore()
- * @method int|false safeDelete()
+ * @method false|int softDelete()
+ * @method false|int restore()
+ * @method false|int safeDelete()
  */
 class Item extends ActiveRecord
 {

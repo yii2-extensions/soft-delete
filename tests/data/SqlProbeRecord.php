@@ -9,9 +9,9 @@ use yii2\extensions\softdelete\DeleteBehavior;
 
 /**
  * @property int $deleted
- * @method int|false safeDelete()
- * @method int|false softDelete()
- * @method int|false restore()
+ * @method false|int safeDelete()
+ * @method false|int softDelete()
+ * @method false|int restore()
  */
 final class SqlProbeRecord extends ActiveRecord
 {

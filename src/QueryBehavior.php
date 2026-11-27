@@ -39,8 +39,8 @@ class QueryBehavior extends Behavior
     /**
      * Restricts the owner query to deleted records, replacing any soft-delete scope applied before.
      *
-     * @return ActiveQuery The owner query.
      * @throws InvalidConfigException When the default condition cannot be built for the query model.
+     * @return ActiveQuery The owner query.
      */
     public function deleted(): ActiveQuery
     {
@@ -54,9 +54,9 @@ class QueryBehavior extends Behavior
      * records; `false`, `0`, `'0'` and `'all'` select all records. Values are compared strictly, so validate request
      * input before passing it.
      *
-     * @return ActiveQuery The owner query.
      * @throws InvalidArgumentException When the value is not one of the accepted values.
      * @throws InvalidConfigException When the default condition cannot be built for the query model.
+     * @return ActiveQuery The owner query.
      */
     public function filterDeleted(mixed $deleted): ActiveQuery
     {
@@ -71,8 +71,8 @@ class QueryBehavior extends Behavior
     /**
      * Returns the condition that selects deleted records, building the default one on first use.
      *
-     * @return array<array-key, mixed> Condition that selects deleted records.
      * @throws InvalidConfigException When the default condition cannot be built for the query model.
+     * @return array<array-key, mixed> Condition that selects deleted records.
      */
     public function getDeletedCondition(): array
     {
@@ -82,8 +82,8 @@ class QueryBehavior extends Behavior
     /**
      * Returns the condition that selects records that are not deleted, building the default one on first use.
      *
-     * @return array<array-key, mixed> Condition that selects records that are not deleted.
      * @throws InvalidConfigException When the default condition cannot be built for the query model.
+     * @return array<array-key, mixed> Condition that selects records that are not deleted.
      */
     public function getNotDeletedCondition(): array
     {
@@ -93,8 +93,8 @@ class QueryBehavior extends Behavior
     /**
      * Restricts the owner query to records that are not deleted, replacing any soft-delete scope applied before.
      *
-     * @return ActiveQuery The owner query.
      * @throws InvalidConfigException When the default condition cannot be built for the query model.
+     * @return ActiveQuery The owner query.
      */
     public function notDeleted(): ActiveQuery
     {
@@ -156,9 +156,9 @@ class QueryBehavior extends Behavior
      * A computed value cannot be matched, so it becomes a `NOT NULL` check, which requires its restore value to be
      * `null`.
      *
-     * @return array<array-key, mixed>
      * @throws InvalidConfigException When the query model has no {@see DeleteBehavior}, or a computed value has a
      * restore value other than `null`.
+     * @return array<array-key, mixed>
      */
     protected function defaultDeletedCondition(): array
     {
@@ -193,9 +193,9 @@ class QueryBehavior extends Behavior
     /**
      * Builds the condition that matches the model's restore values without invoking any computed value.
      *
-     * @return array<array-key, mixed>
      * @throws InvalidConfigException When the query model has no {@see DeleteBehavior}, its restore values cannot be
      * inferred, or one of them is computed.
+     * @return array<array-key, mixed>
      */
     protected function defaultNotDeletedCondition(): array
     {

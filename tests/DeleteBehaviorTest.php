@@ -852,7 +852,7 @@ class DeleteBehaviorTest extends TestCase
     }
 
     /**
-     * @param Closure(Item): (int|false) $write
+     * @param Closure(Item): (false|int) $write
      */
     #[DataProviderExternal(DeleteBehaviorProvider::class, 'transitionsWithTargetMarker')]
     public function testNoOpTransitionDiscardsPendingMarkerChange(Closure $write, bool $marker): void
@@ -1956,7 +1956,7 @@ class DeleteBehaviorTest extends TestCase
     }
 
     /**
-     * @param Closure(Item): (int|false) $write
+     * @param Closure(Item): (false|int) $write
      */
     #[DataProviderExternal(DeleteBehaviorProvider::class, 'transitionsWithTargetMarker')]
     public function testThrowInvalidConfigExceptionForNoOpWriteWithoutPrimaryKey(Closure $write, bool $marker): void
@@ -2050,7 +2050,7 @@ class DeleteBehaviorTest extends TestCase
     }
 
     /**
-     * @param Closure(Item): (int|false) $write
+     * @param Closure(Item): (false|int) $write
      */
     #[DataProviderExternal(DeleteBehaviorProvider::class, 'transitions')]
     public function testThrowInvalidConfigExceptionForWriteWithoutPrimaryKey(Closure $write): void
@@ -2715,7 +2715,7 @@ class DeleteBehaviorTest extends TestCase
     }
 
     /**
-     * @param Closure(Item): (int|false) $write
+     * @param Closure(Item): (false|int) $write
      */
     #[DataProviderExternal(DeleteBehaviorProvider::class, 'transitions')]
     public function testZeroRowWriteKeepsPartiallyLoadedRecordIntact(Closure $write): void

@@ -158,9 +158,9 @@ class DeleteBehavior extends Behavior
     /**
      * Runs the owner's public `beforeRestore()`, when declared, and triggers {@see EVENT_BEFORE_RESTORE}.
      *
+     * @throws InvalidConfigException When the owner declares `beforeRestore()` with a visibility other than public.
      * @return bool Whether the restoration may proceed; `false` when the owner method returns a falsy value, in which
      * case the event is not triggered, or when an event handler invalidates the event.
-     * @throws InvalidConfigException When the owner declares `beforeRestore()` with a visibility other than public.
      */
     public function beforeRestore(): bool
     {
@@ -170,9 +170,9 @@ class DeleteBehavior extends Behavior
     /**
      * Runs the owner's public `beforeSoftDelete()`, when declared, and triggers {@see EVENT_BEFORE_SOFT_DELETE}.
      *
+     * @throws InvalidConfigException When the owner declares `beforeSoftDelete()` with a visibility other than public.
      * @return bool Whether the soft deletion may proceed; `false` when the owner method returns a falsy value, in
      * which case the event is not triggered, or when an event handler invalidates the event.
-     * @throws InvalidConfigException When the owner declares `beforeSoftDelete()` with a visibility other than public.
      */
     public function beforeSoftDelete(): bool
     {
@@ -195,8 +195,8 @@ class DeleteBehavior extends Behavior
      * Returns {@see restoreAttributeValues} when set. Otherwise infers each value from
      * {@see softDeleteAttributeValues}: a `bool` is negated, `0` and `1` swap, and a computed value restores to `null`.
      *
-     * @return array<string, mixed> Values by attribute name.
      * @throws InvalidConfigException When a soft-delete value has no inferable counterpart.
+     * @return array<string, mixed> Values by attribute name.
      */
     public function resolveRestoreAttributeValues(): array
     {
@@ -212,7 +212,7 @@ class DeleteBehavior extends Behavior
                 $value === 0 || $value === 1 => 1 - $value,
                 !is_scalar($value) && is_callable($value) => null,
                 default => throw new InvalidConfigException(
-                    Message::RESTORE_ATTRIBUTE_VALUES_NOT_INFERABLE->getMessage(get_class($this)),
+                    Message::RESTORE_ATTRIBUTE_VALUES_NOT_INFERABLE->getMessage(static::class),
                 ),
             };
         }
@@ -225,11 +225,11 @@ class DeleteBehavior extends Behavior
      *
      * Runs inside a transaction when the owner declares {@see ActiveRecord::OP_UPDATE} transactional.
      *
-     * @return int|false Number of restored rows; `0` for an unsaved record, when no value differs from the loaded
-     * ones, or when no row matched; `false` when a hook or event handler cancels the restoration.
      * @throws InvalidConfigException When the restore values cannot be inferred or an owner requirement is not met.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
      * @throws RuntimeException When a rollback fails after an exception.
+     * @return false|int Number of restored rows; `0` for an unsaved record, when no value differs from the loaded
+     * ones, or when no row matched; `false` when a hook or event handler cancels the restoration.
      */
     public function restore(): int|false
     {
@@ -264,11 +264,11 @@ class DeleteBehavior extends Behavior
      * exception, that transaction is rolled back and the soft deletion runs in a new one. An exception raised by a
      * hook is never eligible.
      *
-     * @return int|false Number of deleted or marked rows; `0` for an unsaved record or when no row matched; `false`
-     * when a hook or event handler cancels the operation.
      * @throws InvalidConfigException When the owner or {@see deleteFallbackException} is invalid.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
      * @throws RuntimeException When a rollback fails after an exception.
+     * @return false|int Number of deleted or marked rows; `0` for an unsaved record or when no row matched; `false`
+     * when a hook or event handler cancels the operation.
      */
     public function safeDelete(): int|false
     {
@@ -307,11 +307,11 @@ class DeleteBehavior extends Behavior
      * {@see ActiveRecord::OP_UPDATE} transactional. The physical delete is {@see BaseActiveRecord::delete()}, which
      * follows {@see ActiveRecord::OP_DELETE} alone.
      *
-     * @return int|false Number of affected rows; `0` for an unsaved record, when no value differs from the loaded
-     * ones, or when no row matched; `false` when a hook or event handler cancels the operation.
      * @throws InvalidConfigException When {@see allowDeleteCallback} is invalid or an owner requirement is not met.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
      * @throws RuntimeException When a rollback fails after an exception.
+     * @return false|int Number of affected rows; `0` for an unsaved record, when no value differs from the loaded
+     * ones, or when no row matched; `false` when a hook or event handler cancels the operation.
      */
     public function softDelete(): int|false
     {
@@ -348,8 +348,8 @@ class DeleteBehavior extends Behavior
     /**
      * Returns whether {@see softDelete()} deletes the row physically, as decided by {@see allowDeleteCallback}.
      *
-     * @return bool Whether the physical delete is allowed; `false` when no callback is configured.
      * @throws InvalidConfigException When the callback is not callable or does not return a `bool`.
+     * @return bool Whether the physical delete is allowed; `false` when no callback is configured.
      */
     protected function isDeleteAllowed(): bool
     {
@@ -371,9 +371,9 @@ class DeleteBehavior extends Behavior
     /**
      * Writes the restore values together with the other changed owner attributes.
      *
-     * @return int Number of restored rows.
      * @throws InvalidConfigException When the restore values cannot be inferred or the primary key is not loaded.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
+     * @return int Number of restored rows.
      */
     protected function restoreInternal(): int
     {
@@ -386,9 +386,9 @@ class DeleteBehavior extends Behavior
     /**
      * Runs the soft-delete hooks around writing {@see softDeleteAttributeValues} with the other changed attributes.
      *
-     * @return int|false Number of rows marked as deleted, or `false` when a hook or event handler cancels.
      * @throws InvalidConfigException When the primary key is not loaded or an owner hook is not public.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
+     * @return false|int Number of rows marked as deleted, or `false` when a hook or event handler cancels.
      */
     protected function softDeleteInternal(): int|false
     {
@@ -713,7 +713,7 @@ class DeleteBehavior extends Behavior
      * transactional in its current scenario.
      *
      * @param int $operations {@see ActiveRecord} `OP_*` constants combined with `|`.
-     * @param callable(): (int|false) $operation
+     * @param callable(): (false|int) $operation
      */
     private function runOperation(BaseActiveRecord $owner, int $operations, callable $operation): int|false
     {

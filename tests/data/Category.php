@@ -15,9 +15,9 @@ use yii2\extensions\softdelete\QueryBehavior;
  * @property bool $isDeleted
  *
  * @property list<Item> $items
- * @method int|false softDelete()
- * @method int|false restore()
- * @method int|false safeDelete()
+ * @method false|int softDelete()
+ * @method false|int restore()
+ * @method false|int safeDelete()
  */
 class Category extends ActiveRecord
 {
