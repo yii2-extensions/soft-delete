@@ -45,12 +45,12 @@ installed source, PHPDoc, and changelog. The skill has no dependency on a siblin
 
 These contracts can look like defects. Do not change the package or work around them in the application:
 
-- `softDelete()` and `restore()` return `0` without a query when the loaded marker values already equal the target.
-  The stored row is not read again and the optimistic lock is not checked, so reload a model that may be stale.
-- A rolled-back call returns the model to its state before the call. A successful call inside an outer transaction
-  only releases its savepoint: if the outer transaction rolls back later, reload the model.
-- Pass the rows of a composite `in` scope as an array or a rewindable iterator. A generator cannot be read again
-  when `alias()` re-qualifies the scope.
+- `softDelete()` and `restore()` return `0` without a query when the loaded marker values already equal the target. The
+  stored row is not read again and the optimistic lock is not checked, so reload a model that may be stale.
+- A rolled-back call returns the model to its state before the call. A successful call inside an outer transaction only
+  releases its savepoint: if the outer transaction rolls back later, reload the model.
+- Pass the rows of a composite `in` scope as an array or a rewindable iterator. A generator cannot be read again when
+  `alias()` re-qualifies the scope.
 
 ## Verify the task
 
