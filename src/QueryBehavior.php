@@ -102,6 +102,8 @@ class QueryBehavior extends Behavior
     }
 
     /**
+     * Sets the condition used to select soft-deleted records.
+     *
      * @param array<array-key, mixed>|null $deletedCondition Condition that selects deleted records, or `null` to use
      * the default one.
      */
@@ -111,6 +113,8 @@ class QueryBehavior extends Behavior
     }
 
     /**
+     * Sets the condition used to select records that are not soft-deleted.
+     *
      * @param array<array-key, mixed>|null $notDeletedCondition Condition that selects records that are not deleted, or
      * `null` to use the default one.
      */

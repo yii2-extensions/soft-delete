@@ -107,8 +107,10 @@ Use `22.0.x-dev` in place of `2.0.55` for the Yii 22 check. To generate a Clover
 composer tests -- --coverage-clover runtime/coverage.xml
 ```
 
-SQLite runs with `composer tests` and does not need a database service. The other drivers have their own workflows. To
-run a group locally, start that driver's disposable database and run the matching command:
+SQLite runs with `composer tests` and does not need a database service. The other drivers have their own workflows.
+Composer requires only `pdo_sqlite`; each other group also needs its PHP PDO driver: `pdo_mysql` for `mysql`,
+`pdo_pgsql` for `pgsql`, `pdo_sqlsrv` for `mssql` and `pdo_oci` for `oci`. To run a group locally, start that driver's
+disposable database and run the matching command:
 
 ```bash
 vendor/bin/phpunit --group mysql

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace yii2\extensions\softdelete\tests;
 
+use AppendIterator;
 use ArrayIterator;
 use ArrayObject;
 use Generator;
@@ -48,6 +49,68 @@ class QueryBehaviorTest extends TestCase
         );
     }
 
+    public function testCloneKeepsItsOwnCopyOfTheConfiguredConditions(): void
+    {
+        $query = $this->queryWithDeletedCondition(['id' => 2], Category::class);
+
+        $copy = clone $query;
+
+        self::assertSame(
+            ['id' => 2],
+            $this->queryBehavior($copy)->deletedCondition,
+            'The clone must keep the configured condition.',
+        );
+
+        $this->queryBehavior($copy)->deletedCondition = ['id' => 3];
+
+        self::assertSame(
+            [2],
+            array_column($query->deleted()->all(), 'id'),
+            'The original must keep its behavior and its condition.',
+        );
+        self::assertSame(
+            [3],
+            array_column($copy->deleted()->all(), 'id'),
+            'The clone must apply its own condition.',
+        );
+    }
+
+    public function testCompositeScopeKeepsEveryRowOfAnIterableOperandWithRepeatedKeys(): void
+    {
+        $rows = new AppendIterator();
+
+        $rows->append(new ArrayIterator([new ArrayObject(['id' => 1, 'name' => 'category1'])]));
+        $rows->append(new ArrayIterator([['id' => 2, 'name' => 'category2']]));
+
+        $condition = (new Condition(['in', ['id', 'name'], $rows], '{{c}}'))->getExpressions();
+
+        self::assertArrayHasKey(
+            0,
+            $condition,
+            'The scope must hold the condition.',
+        );
+
+        $condition = $condition[0];
+
+        self::assertIsArray(
+            $condition,
+            'The condition must stay in array format.',
+        );
+        self::assertArrayHasKey(
+            2,
+            $condition,
+            'The condition must keep its values.',
+        );
+        self::assertSame(
+            [
+                ['{{c}}.[[id]]' => 1, '{{c}}.[[name]]' => 'category1'],
+                ['{{c}}.[[id]]' => 2, '{{c}}.[[name]]' => 'category2'],
+            ],
+            $condition[2],
+            'Rows that share an iterator key must all be kept.',
+        );
+    }
+
     public function testCompositeScopeLeavesSubqueryOperandIntact(): void
     {
         $subquery = (new Query())->select(['id' => 'id', 'name' => 'name'])->from('Category');
@@ -87,33 +150,23 @@ class QueryBehaviorTest extends TestCase
         );
     }
 
-    public function testCompositeScopePreservesTheKeysOfAnIterableOperand(): void
+    public function testCompositeScopeQualifiesAnIterableColumnTuple(): void
     {
-        $rows = new ArrayIterator(['selected' => new ArrayObject(['id' => 2, 'name' => 'category2'])]);
+        $columns = new ArrayIterator(['first' => 'id', 'second' => 'name']);
 
-        $condition = (new Condition(['in', ['id', 'name'], $rows], '{{c}}'))->getExpressions();
+        $condition = (new Condition(['in', $columns, [['id' => 2, 'name' => 'category2']]], '{{c}}'))
+            ->getExpressions();
 
-        self::assertArrayHasKey(
-            0,
-            $condition,
-            'The scope must hold the condition.',
-        );
-
-        $condition = $condition[0];
-
-        self::assertIsArray(
-            $condition,
-            'The condition must stay in array format.',
-        );
-        self::assertArrayHasKey(
-            2,
-            $condition,
-            'The condition must keep its values.',
-        );
         self::assertSame(
-            ['selected' => ['{{c}}.[[id]]' => 2, '{{c}}.[[name]]' => 'category2']],
-            $condition[2],
-            'Qualification must change the column keys without changing the row keys.',
+            [
+                [
+                    'in',
+                    ['{{c}}.[[id]]', '{{c}}.[[name]]'],
+                    [['{{c}}.[[id]]' => 2, '{{c}}.[[name]]' => 'category2']],
+                ],
+            ],
+            $condition,
+            'Every column of the tuple and of its rows must carry the alias.',
         );
     }
 
@@ -177,7 +230,7 @@ class QueryBehaviorTest extends TestCase
             'The condition must keep its values.',
         );
         self::assertSame(
-            ['selected' => ['{{c}}.[[id]]' => 2, '{{c}}.[[name]]' => 'category2']],
+            [['{{c}}.[[id]]' => 2, '{{c}}.[[name]]' => 'category2']],
             $condition[2],
             'The generated rows must carry the alias.',
         );

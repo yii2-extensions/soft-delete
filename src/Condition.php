@@ -58,6 +58,8 @@ final class Condition extends AndCondition
     private const array TUPLE_OPERATORS = ['in', 'not in'];
 
     /**
+     * Creates a condition with optional table-alias qualification.
+     *
      * @param array<array-key, mixed> $condition Condition in Yii array format, kept unqualified for
      * {@see withAlias()}. The rows of an `in` column tuple given as a {@see Traversable} are read each time the
      * condition is qualified, so pass an array or a rewindable iterator: a generator cannot be read again by a later
@@ -143,9 +145,15 @@ final class Condition extends AndCondition
         } elseif (in_array($operator, self::COLUMN_OPERATORS, true)) {
             $column = $condition[1] ?? null;
 
+            $tuple = in_array($operator, self::TUPLE_OPERATORS, true);
+
+            if ($tuple && $column instanceof Traversable) {
+                $column = iterator_to_array($column, false);
+            }
+
             if (is_string($column)) {
                 $condition[1] = self::qualifyColumn($column, $alias);
-            } elseif (is_array($column) && in_array($operator, self::TUPLE_OPERATORS, true)) {
+            } elseif ($tuple && is_array($column)) {
                 $condition = self::qualifyTuple($condition, $column, $alias);
             }
         }
@@ -187,7 +195,8 @@ final class Condition extends AndCondition
         $rows = $condition[2] ?? null;
 
         if ($rows instanceof Traversable) {
-            $rows = iterator_to_array($rows);
+            // Yii reads the rows without their keys, and an iterator may repeat a key for different rows.
+            $rows = iterator_to_array($rows, false);
         }
 
         if (is_array($rows)) {

@@ -25,6 +25,22 @@ use function is_array;
 class ScopedQuery extends ActiveQuery
 {
     /**
+     * Keeps the `softDelete` behavior of the cloned query, with its configured conditions, on the clone.
+     *
+     * Yii detaches every behavior from a cloned component, and {@see behaviors()} alone would declare the default one.
+     */
+    public function __clone()
+    {
+        $behavior = $this->getBehavior('softDelete');
+
+        parent::__clone();
+
+        if ($behavior !== null) {
+            $this->attachBehavior('softDelete', clone $behavior);
+        }
+    }
+
+    /**
      * Sets the primary table alias and re-qualifies the soft-delete scope with it.
      *
      * @param string $alias Table alias, with or without `{{` and `}}` quoting.

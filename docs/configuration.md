@@ -10,10 +10,11 @@ other value, such as `2` or `'archived'`, raises `InvalidConfigException` unless
 values.
 
 Call `softDelete()` or `restore()` explicitly. A normal ActiveRecord `delete()` still removes the row. If
-`allowDeleteCallback` returns true, `softDelete()` delegates to Yii's native physical delete. Set `invokeDeleteEvents`
-to `false` to stop `softDelete()` from calling the model's `beforeDelete()` and `afterDelete()`. `softDelete()`,
-`restore()`, and `safeDelete()` need the primary key, and the lock column when optimistic locking is used, to be loaded;
-a record loaded without its primary key raises `InvalidConfigException`.
+`allowDeleteCallback` returns true, `softDelete()` delegates to Yii's native physical delete, which runs in a
+transaction only when the model declares `OP_DELETE` transactional. Set `invokeDeleteEvents` to `false` to stop
+`softDelete()` from calling the model's `beforeDelete()` and `afterDelete()`. `softDelete()`, `restore()`, and
+`safeDelete()` need the primary key, and the lock column when optimistic locking is used, to be loaded; a record loaded
+without its primary key raises `InvalidConfigException`.
 
 When the model declares `optimisticLock()`, every write matches the loaded version and stores the next one. A version
 that no longer matches the row, is not a non-negative integer, or cannot be incremented raises `StaleObjectException`.
@@ -54,13 +55,17 @@ entry, `'ORA-00001: unique constraint'`, so add the new key to the existing map 
 
 `safeDelete()` uses transactions. Inside an existing transaction, savepoints must be supported. Explicit soft deletion
 and restoration keep Yii's configured transaction policy. A veto returns `false`; an unsaved record or a write affecting
-zero rows returns `0` and emits no success event. When a transaction is rolled back, including one whose commit fails,
-the model returns to its state before the call. A constraint checked at commit, such as a deferred foreign key, raises
-the driver's exception and does not trigger the fallback.
+zero rows returns `0` and emits no success event. When the operation rolls back its own transaction or savepoint,
+including a transaction whose commit fails, the model returns to its state before the call. Inside an existing
+transaction a successful operation only releases its savepoint: if that outer transaction rolls back later, the model
+is not restored, so reload it before using it again. A constraint checked at commit, such as a deferred foreign key,
+raises the driver's exception and does not trigger the fallback.
 
-A row that already holds the target values is not written: `softDelete()` and `restore()` return `0` and the model takes
-the stored values. Values are compared strictly, so configure markers with the type Yii loads for the column. On MySQL a
-`TINYINT(1)` column loads as an integer, which makes `1` and `0` the matching markers.
+A model whose loaded values already equal the target values is not written: `softDelete()` and `restore()` return `0`
+and the model keeps those values. As with Yii's `update()`, the stored row is not read again and the optimistic lock is
+not checked, so reload a model that another process may have changed. Values are compared strictly, so configure markers
+with the type Yii loads for the column. On MySQL a `TINYINT(1)` column loads as an integer, which makes `1` and `0` the
+matching markers.
 
 ## Lifecycle hooks
 

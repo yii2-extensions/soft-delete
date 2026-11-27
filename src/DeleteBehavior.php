@@ -9,7 +9,7 @@ use ReflectionMethod;
 use RuntimeException;
 use Throwable;
 use yii\base\{Behavior, Event, InvalidConfigException, ModelEvent};
-use yii\db\{ActiveRecord, BaseActiveRecord, Connection, IntegrityException, StaleObjectException};
+use yii\db\{ActiveRecord, BaseActiveRecord, Connection, IntegrityException, StaleObjectException, Transaction};
 use yii2\extensions\softdelete\exception\Message;
 
 use function array_key_exists;
@@ -180,6 +180,8 @@ class DeleteBehavior extends Behavior
     }
 
     /**
+     * Registers the owner event that can apply active marker defaults before insertion.
+     *
      * @return array<string, string> Owner events handled by the behavior.
      */
     public function events(): array
@@ -223,8 +225,8 @@ class DeleteBehavior extends Behavior
      *
      * Runs inside a transaction when the owner declares {@see ActiveRecord::OP_UPDATE} transactional.
      *
-     * @return int|false Number of restored rows; `0` for an unsaved record, when no value differs from the stored
-     * row, or when no row matched; `false` when a hook or event handler cancels the restoration.
+     * @return int|false Number of restored rows; `0` for an unsaved record, when no value differs from the loaded
+     * ones, or when no row matched; `false` when a hook or event handler cancels the restoration.
      * @throws InvalidConfigException When the restore values cannot be inferred or an owner requirement is not met.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
      * @throws RuntimeException When a rollback fails after an exception.
@@ -301,11 +303,12 @@ class DeleteBehavior extends Behavior
      * Marks the record as deleted by writing {@see softDeleteAttributeValues} together with its other changed
      * attributes, or deletes it physically when {@see allowDeleteCallback} allows it.
      *
-     * Runs inside a transaction when the owner declares {@see ActiveRecord::OP_DELETE} or
-     * {@see ActiveRecord::OP_UPDATE} transactional.
+     * Marking the record runs inside a transaction when the owner declares {@see ActiveRecord::OP_DELETE} or
+     * {@see ActiveRecord::OP_UPDATE} transactional. The physical delete is {@see BaseActiveRecord::delete()}, which
+     * follows {@see ActiveRecord::OP_DELETE} alone.
      *
-     * @return int|false Number of affected rows; `0` for an unsaved record, when no value differs from the stored
-     * row, or when no row matched; `false` when a hook or event handler cancels the operation.
+     * @return int|false Number of affected rows; `0` for an unsaved record, when no value differs from the loaded
+     * ones, or when no row matched; `false` when a hook or event handler cancels the operation.
      * @throws InvalidConfigException When {@see allowDeleteCallback} is invalid or an owner requirement is not met.
      * @throws StaleObjectException When the optimistic lock value is invalid, cannot be incremented, or is outdated.
      * @throws RuntimeException When a rollback fails after an exception.
@@ -317,6 +320,9 @@ class DeleteBehavior extends Behavior
             return 0;
         }
         if ($this->isDeleteAllowed()) {
+            // Yii's delete() would search for a `null` key, match no row and still report the record as deleted.
+            $this->oldPrimaryKey($owner);
+
             return $owner->delete();
         }
 
@@ -440,7 +446,7 @@ class DeleteBehavior extends Behavior
         $lock = $this->lockCondition($owner);
 
         try {
-            $deleted = $owner::deleteAll(array_replace($condition, $lock));
+            $deleted = $owner::deleteAll(['and', $condition, $lock]);
         } catch (Throwable $exception) {
             if ($exception instanceof $fallbackClass) {
                 return $exception;
@@ -466,6 +472,9 @@ class DeleteBehavior extends Behavior
 
     /**
      * Returns the lock column mapped to its non-negative version, or an empty array when locking is disabled.
+     *
+     * Writes combine it with the persisted primary key as a separate predicate, so a lock column that is also a key
+     * column never replaces the persisted key value.
      *
      * @return array<string, int>
      */
@@ -575,6 +584,44 @@ class DeleteBehavior extends Behavior
     }
 
     /**
+     * Rolls the transaction back and returns the owner attributes to the captured state.
+     *
+     * The outermost level rolls PDO back itself and restores the owner before Yii closes the transaction, so a failing
+     * rollback listener leaves the owner matching the rolled-back row. A rollback the database rejects leaves the owner
+     * as the operation left it.
+     *
+     * @param array<array-key, mixed> $attributes Captured attribute values.
+     * @param array<array-key, mixed> $oldAttributes Captured old attribute values.
+     */
+    private function rollBack(
+        Connection $db,
+        Transaction $transaction,
+        BaseActiveRecord $owner,
+        array $attributes,
+        array $oldAttributes,
+    ): void {
+        if ($transaction->getLevel() > 1) {
+            // Rolling back to a savepoint raises no event.
+            $transaction->rollBack();
+
+            $this->restoreState($owner, $attributes, $oldAttributes);
+
+            return;
+        }
+
+        $pdo = $db->pdo;
+
+        if ($pdo?->inTransaction() === true) {
+            $pdo->rollBack();
+        }
+
+        $this->restoreState($owner, $attributes, $oldAttributes);
+
+        // PDO holds no transaction now, so Yii only closes its level and raises the rollback event.
+        $transaction->rollBack();
+    }
+
+    /**
      * Creates the exception that reports a rollback failure, keeping its cause as the previous exception.
      */
     private function rollbackFailureException(Throwable $failure, Throwable $cause): RuntimeException
@@ -589,11 +636,11 @@ class DeleteBehavior extends Behavior
     /**
      * Runs the operation inside a transaction and rolls it back unless the operation returns a row count.
      *
-     * The owner attributes are captured before the transaction starts and restored after each rollback, including a
-     * failed commit of the outermost transaction: its PDO transaction is rolled back when the driver left it open, and
-     * the attributes are restored whether or not the driver did. A commit listener that fails after the commit leaves
-     * the committed state in place. A rollback failure is wrapped in {@see RuntimeException} when an exception or a
-     * returned {@see Throwable} caused the rollback, and rethrown unchanged when the operation returned `false`.
+     * The owner attributes are captured before the transaction starts and restored after each rollback, including the
+     * one that follows a commit the database rejects. The outermost level commits PDO itself before Yii closes the
+     * transaction and raises the commit event, so a commit listener that fails leaves the committed state in place and
+     * any transaction it opened untouched. A rollback failure is wrapped in {@see RuntimeException} when an exception
+     * or a returned {@see Throwable} caused the rollback, and rethrown unchanged when the operation returned `false`.
      *
      * @template T of int|false|Throwable
      * @param callable(): T $operation
@@ -611,62 +658,52 @@ class DeleteBehavior extends Behavior
 
         $oldAttributes = $owner->getOldAttributes();
 
-        $attributes = array_replace($oldAttributes, $owner->getDirtyAttributes());
+        // Dirty attributes omit a loaded attribute that was unset; a copy without old attributes reports every present
+        // attribute, and only those.
+        $present = clone $owner;
+
+        $present->setOldAttributes(null);
+
+        $attributes = $present->getDirtyAttributes();
 
         $transaction = $db->beginTransaction();
         $level = $transaction->getLevel();
-
-        // Yii raises the commit event only after PDO has committed the outermost transaction.
-        $committed = false;
-        $markCommitted = static function () use (&$committed): void {
-            $committed = true;
-        };
-
-        $db->on(Connection::EVENT_COMMIT_TRANSACTION, $markCommitted, null, false);
 
         try {
             $result = $operation();
 
             if (is_int($result)) {
+                $pdo = $db->pdo;
+
+                // A rejected commit throws here, while the Yii transaction is still open and can be rolled back.
+                if ($level === 1 && $pdo?->inTransaction() === true) {
+                    $pdo->commit();
+                }
+
                 $transaction->commit();
+
                 return $result;
             }
         } catch (Throwable $exception) {
-            try {
-                if ($transaction->getLevel() === $level) {
-                    $transaction->rollBack();
-
-                    $this->restoreState($owner, $attributes, $oldAttributes);
-                } elseif ($transaction->getLevel() === 0) {
-                    // Yii closes its outermost level before PDO commits, and only some drivers keep a transaction
-                    // open after its commit failed.
-                    $pdo = $db->pdo;
-
-                    if ($pdo?->inTransaction() === true) {
-                        $pdo->rollBack();
-                    }
-
-                    if (!$committed) {
-                        $this->restoreState($owner, $attributes, $oldAttributes);
-                    }
+            // A lower level means the transaction is already closed: a commit listener failed after the commit.
+            if ($transaction->getLevel() === $level) {
+                try {
+                    $this->rollBack($db, $transaction, $owner, $attributes, $oldAttributes);
+                } catch (Throwable $rollbackFailure) {
+                    throw $this->rollbackFailureException($rollbackFailure, $exception);
                 }
-            } catch (Throwable $rollbackFailure) {
-                throw $this->rollbackFailureException($rollbackFailure, $exception);
             }
 
             throw $exception;
-        } finally {
-            $db->off(Connection::EVENT_COMMIT_TRANSACTION, $markCommitted);
         }
 
         try {
-            $transaction->rollBack();
+            $this->rollBack($db, $transaction, $owner, $attributes, $oldAttributes);
         } catch (Throwable $rollbackFailure) {
             throw $result instanceof Throwable
                 ? $this->rollbackFailureException($rollbackFailure, $result)
                 : $rollbackFailure;
         }
-        $this->restoreState($owner, $attributes, $oldAttributes);
 
         return $result;
     }
@@ -706,12 +743,12 @@ class DeleteBehavior extends Behavior
      * Writes the given attributes to the owner row, honoring {@see BaseActiveRecord::optimisticLock()}.
      *
      * The primary key and the lock are validated first, so an invalid record throws even with nothing to write. Only
-     * values that differ from the stored ones are written, together with the next lock version. The owner receives
-     * the values once the stored row holds them: after the UPDATE affected a row, or when no value differed, so a
-     * pending edit that contradicts them never stays dirty.
+     * values that differ from the loaded ones are written, together with the next lock version; as in
+     * {@see BaseActiveRecord::update()}, the stored row is not read again. The owner receives the values after the
+     * UPDATE affected a row, or when no value differed, so a pending edit that contradicts them never stays dirty.
      *
      * @param array<array-key, mixed> $attributes Values to persist, by attribute name.
-     * @return int Number of affected rows; `0` when no value differs from the stored one, or when no row matched
+     * @return int Number of affected rows; `0` when no value differs from the loaded one, or when no row matched
      * without optimistic locking.
      */
     private function updateAttributes(BaseActiveRecord $owner, array $attributes): int
@@ -744,7 +781,7 @@ class DeleteBehavior extends Behavior
                 $values[$name] = $changes[$name];
             }
 
-            $rows = $owner::updateAll($changes, array_replace($condition, $lock));
+            $rows = $owner::updateAll($changes, ['and', $condition, $lock]);
 
             if ($rows === 0) {
                 if ($lock !== []) {

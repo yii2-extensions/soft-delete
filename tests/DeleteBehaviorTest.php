@@ -15,12 +15,12 @@ use PHPUnit\Framework\Attributes\{DataProviderExternal, Group, TestWith};
 use RuntimeException;
 use stdClass;
 use yii\base\{InvalidConfigException, ModelEvent, NotSupportedException};
-use yii\db\{BaseActiveRecord, Connection, IntegrityException, StaleObjectException};
+use yii\db\{BaseActiveRecord, Connection, Exception, IntegrityException, StaleObjectException};
 use yii2\extensions\softdelete\DeleteBehavior;
 use yii2\extensions\softdelete\exception\Message;
 use yii2\extensions\softdelete\tests\data\{Category, Item, TransactionalItem, VersionedItem};
 use yii2\extensions\softdelete\tests\provider\DeleteBehaviorProvider;
-use yii2\extensions\softdelete\tests\support\CommitRejectingPdo;
+use yii2\extensions\softdelete\tests\support\{CommitRejectingPdo, RollbackRejectingPdo};
 
 /**
  * Unit tests for {@see DeleteBehavior} soft deletion, restoration and safe deletion of ActiveRecord models on SQLite.
@@ -277,6 +277,82 @@ class DeleteBehaviorTest extends TestCase
 
         Item::getDb()->on(
             Connection::EVENT_COMMIT_TRANSACTION,
+            static fn() => throw $error,
+        );
+
+        self::assertSame(
+            $error,
+            self::catchThrowable(static fn() => $item->safeDelete()),
+            'The exception must originate in the listener.',
+        );
+        self::assertTrue(
+            $item->isNewRecord,
+            'The already committed deletion must remain reflected in the model.',
+        );
+        self::assertNull(
+            Item::findOne(2),
+            'The committed deletion must remain stored.',
+        );
+    }
+
+    public function testCommitListenerFailureLeavesTheTransactionItOpened(): void
+    {
+        $item = Item::requireOne(2);
+        $db = Item::getDb();
+
+        $error = new LogicException(
+            'Commit listener failed',
+        );
+
+        $db->on(
+            Connection::EVENT_COMMIT_TRANSACTION,
+            static function () use ($db, $error): never {
+                $db->beginTransaction();
+
+                Item::updateAll(['name' => 'audit'], ['id' => 1]);
+
+                throw $error;
+            },
+        );
+
+        self::assertSame(
+            $error,
+            self::catchThrowable(static fn() => $item->safeDelete()),
+            'The exception must originate in the listener.',
+        );
+
+        $audit = $db->getTransaction();
+
+        self::assertNotNull(
+            $audit,
+            'The listener transaction must stay open.',
+        );
+
+        $db->off(Connection::EVENT_COMMIT_TRANSACTION);
+        $audit->commit();
+
+        self::assertSame(
+            'audit',
+            Item::requireOne(1)->name,
+            'The listener write must not be rolled back.',
+        );
+        self::assertNull(
+            Item::findOne(2),
+            'The committed deletion must remain stored.',
+        );
+    }
+
+    public function testCommitListenerFailureOnAWildcardEventLeavesAlreadyCommittedModelState(): void
+    {
+        $item = Item::requireOne(2);
+
+        $error = new LogicException(
+            'Commit listener failed',
+        );
+
+        // Yii runs wildcard handlers before the handlers of the exact event name.
+        Item::getDb()->on(
+            'commit*',
             static fn() => throw $error,
         );
 
@@ -614,6 +690,82 @@ class DeleteBehaviorTest extends TestCase
         );
     }
 
+    public function testLockColumnInsideThePrimaryKeyNeverTargetsASiblingRow(): void
+    {
+        $db = Item::getDb();
+
+        $db
+            ->createCommand(
+                <<<SQL
+                CREATE TABLE RevisionItem (id INTEGER, revision INTEGER, name TEXT, isDeleted BOOLEAN, PRIMARY KEY (id, revision))
+                SQL
+            )
+            ->execute();
+
+        $db
+            ->createCommand()
+            ->batchInsert(
+                'RevisionItem',
+                ['id', 'revision', 'name', 'isDeleted'],
+                [
+                    [
+                        5,
+                        1,
+                        'first',
+                        false,
+                    ],
+                    [
+                        5,
+                        2,
+                        'second',
+                        false,
+                    ],
+                ],
+            )
+            ->execute();
+
+        $fixture = new class extends Item {
+            public function optimisticLock(): string
+            {
+                return 'revision';
+            }
+
+            public static function tableName(): string
+            {
+                return 'RevisionItem';
+            }
+        };
+
+        $target = $fixture::requireOne(['id' => 5, 'revision' => 1]);
+
+        $sibling = [
+            'id' => 5,
+            'revision' => 2,
+        ];
+
+        $target->setAttribute('revision', 2);
+
+        self::assertInstanceOf(
+            StaleObjectException::class,
+            self::catchThrowable(static fn() => $target->softDelete()),
+            'A lock token that contradicts the persisted key must be outdated.',
+        );
+        self::assertFalse(
+            $fixture::requireOne($sibling)->isDeleted,
+            'The sibling row must stay active.',
+        );
+        self::assertInstanceOf(
+            StaleObjectException::class,
+            self::catchThrowable(static fn() => $target->safeDelete()),
+            'The physical attempt must not match the sibling key.',
+        );
+        self::assertSame(
+            'second',
+            $fixture::requireOne($sibling)->name,
+            'The sibling row must remain.',
+        );
+    }
+
     public function testLockTokenChangeAloneIsNotAWrite(): void
     {
         Item::updateAll(['version' => 0], ['id' => 2]);
@@ -933,6 +1085,87 @@ class DeleteBehaviorTest extends TestCase
         );
     }
 
+    public function testRollbackListenerFailureStillRestoresTheModel(): void
+    {
+        Item::updateAll(['isDeleted' => true], ['id' => 2]);
+
+        $item = TransactionalItem::requireOne(2);
+
+        $item->operations = Item::OP_UPDATE;
+
+        $error = new RuntimeException(
+            'After restore failed',
+        );
+
+        $item->on(
+            DeleteBehavior::EVENT_AFTER_RESTORE,
+            static fn() => throw $error,
+        );
+
+        Item::getDb()->on(
+            Connection::EVENT_ROLLBACK_TRANSACTION,
+            static fn() => throw new LogicException('Rollback hook failure'),
+        );
+
+        $exception = self::catchThrowable(static fn() => $item->restore());
+
+        self::assertSame(
+            Message::ROLLBACK_FAILED->getMessage('Rollback hook failure'),
+            $exception->getMessage(),
+            'The listener failure must be reported.',
+        );
+        self::assertSame(
+            $error,
+            $exception->getPrevious(),
+            'The original error must be the cause.',
+        );
+        self::assertTrue(
+            $item->isDeleted,
+            'The model must match the rolled-back row.',
+        );
+        self::assertSame(
+            [],
+            $item->getDirtyAttributes(),
+            'No rolled-back value may stay pending.',
+        );
+        self::assertTrue(
+            Item::requireOne(2)->isDeleted,
+            'The stored row must stay deleted.',
+        );
+    }
+
+    public function testRolledBackTransactionKeepsAnUnsetAttributeAbsent(): void
+    {
+        Item::updateAll(['isDeleted' => true], ['id' => 2]);
+
+        $item = TransactionalItem::requireOne(2);
+
+        $item->operations = Item::OP_UPDATE;
+
+        unset($item->categoryId);
+
+        $item->on(
+            DeleteBehavior::EVENT_BEFORE_RESTORE,
+            static function (ModelEvent $event): void {
+                $event->isValid = false;
+            },
+        );
+
+        self::assertFalse(
+            $item->restore(),
+            'The veto must cancel the restoration.',
+        );
+        self::assertNull(
+            $item->categoryId,
+            'The unset attribute must not come back.',
+        );
+        self::assertSame(
+            2,
+            $item->getOldAttribute('categoryId'),
+            'The old value must stay as loaded.',
+        );
+    }
+
     #[TestWith([true], 'veto')]
     #[TestWith([false], 'after hook failure')]
     public function testRolledBackTransactionKeepsPartiallyLoadedRecordIntact(bool $veto): void
@@ -1176,6 +1409,35 @@ class DeleteBehaviorTest extends TestCase
         );
     }
 
+    public function testSafeDeleteInsideAnOuterTransactionLeavesTheCommitToIt(): void
+    {
+        $outer = Item::getDb()->beginTransaction();
+
+        $item = Item::requireOne(2);
+
+        self::assertSame(
+            1,
+            $item->safeDelete(),
+            'One row must be deleted.',
+        );
+        self::assertSame(
+            1,
+            $outer->getLevel(),
+            'The outer transaction must stay open.',
+        );
+
+        $outer->rollBack();
+
+        self::assertNotNull(
+            Item::findOne(2),
+            'The outer rollback must return the row.',
+        );
+        self::assertTrue(
+            $item->isNewRecord,
+            'A later outer rollback does not restore the model.',
+        );
+    }
+
     public function testSafeDeleteLocksThePhysicalAttempt(): void
     {
         Item::updateAll(['version' => 1], ['id' => 2]);
@@ -1225,10 +1487,6 @@ class DeleteBehaviorTest extends TestCase
         self::assertTrue(
             $item->isNewRecord,
             'The model must become new.',
-        );
-        self::assertFalse(
-            Item::getDb()->hasEventHandlers(Connection::EVENT_COMMIT_TRANSACTION),
-            'The commit handler must be detached.',
         );
     }
 
@@ -1548,6 +1806,46 @@ class DeleteBehaviorTest extends TestCase
         );
     }
 
+    public function testThrowExceptionWhenListenerClosesTheConnectionBeforeCommit(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'soft-delete');
+
+        // A file database keeps its tables when the connection reopens.
+        $this->mockApplication(['dsn' => "sqlite:$file"]);
+
+        $db = Item::getDb();
+        $item = TransactionalItem::requireOne(2);
+
+        $item->operations = Item::OP_DELETE;
+
+        $item->on(
+            DeleteBehavior::EVENT_AFTER_SOFT_DELETE,
+            static fn() => $db->close(),
+        );
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            'Failed to commit transaction: transaction was inactive.',
+        );
+
+        try {
+            $item->softDelete();
+        } finally {
+            self::assertFalse(
+                $item->isDeleted,
+                'The model must return to its state before the call.',
+            );
+            self::assertFalse(
+                Item::requireOne(2)->isDeleted,
+                'The closed connection must discard the write.',
+            );
+
+            $db->close();
+
+            unlink($file);
+        }
+    }
+
     public function testThrowIntegrityExceptionWhenBeforeDeleteFails(): void
     {
         $item = Item::requireOne(2);
@@ -1784,6 +2082,38 @@ class DeleteBehaviorTest extends TestCase
         }
     }
 
+    public function testThrowInvalidConfigExceptionWhenCallbackAllowsDeleteWithoutPrimaryKey(): void
+    {
+        $item = Item::find()
+            ->select('name')
+            ->where(['id' => 2])
+            ->one();
+
+        self::assertInstanceOf(
+            Item::class,
+            $item,
+            'The partial record must be loaded.',
+        );
+
+        $item->name = 'allow-delete';
+
+        self::forbidEvents($item, [Item::EVENT_AFTER_DELETE]);
+
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessage(
+            Message::PERSISTED_PRIMARY_KEY_REQUIRED->getMessage(),
+        );
+
+        try {
+            $item->softDelete();
+        } finally {
+            self::assertFalse(
+                $item->isNewRecord,
+                'The model must stay persisted.',
+            );
+        }
+    }
+
     public function testThrowInvalidConfigExceptionWhenTransactionalRecordHasNoSqlConnection(): void
     {
         $item = new class extends TransactionalItem {
@@ -1899,10 +2229,6 @@ class DeleteBehaviorTest extends TestCase
                 Item::findOne(2),
                 'The stored row must remain.',
             );
-            self::assertFalse(
-                $db->hasEventHandlers(Connection::EVENT_COMMIT_TRANSACTION),
-                'The commit handler must be detached.',
-            );
         }
     }
 
@@ -1939,6 +2265,46 @@ class DeleteBehaviorTest extends TestCase
                 'The stored row must stay active.',
             );
         }
+    }
+
+    public function testThrowRuntimeExceptionWhenDatabaseRejectsTheRollback(): void
+    {
+        $this->mockApplication(['pdoClass' => RollbackRejectingPdo::class]);
+
+        $item = TransactionalItem::requireOne(2);
+
+        $item->operations = Item::OP_DELETE;
+
+        $error = new LogicException(
+            'After soft delete failed',
+        );
+
+        $item->on(
+            DeleteBehavior::EVENT_AFTER_SOFT_DELETE,
+            static fn() => throw $error,
+        );
+
+        $exception = self::catchThrowable(static fn() => $item->softDelete());
+
+        self::assertInstanceOf(
+            RuntimeException::class,
+            $exception,
+            'The rollback failure must be reported.',
+        );
+        self::assertSame(
+            Message::ROLLBACK_FAILED->getMessage('Rollback rejected.'),
+            $exception->getMessage(),
+            'The message must carry the rollback failure.',
+        );
+        self::assertSame(
+            $error,
+            $exception->getPrevious(),
+            'The original error must be the cause.',
+        );
+        self::assertTrue(
+            $item->isDeleted,
+            'Without a completed rollback the model must keep the written state.',
+        );
     }
 
     public function testThrowRuntimeExceptionWhenPhysicalDeleteFailsOutsideFallbackType(): void

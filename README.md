@@ -163,6 +163,9 @@ Practical guides for configuring soft deletion, querying records, and running th
 - 💡 [Usage Examples](https://github.com/yii2-extensions/soft-delete/blob/main/docs/examples.md)
 - 🧪 [Testing Guide](https://github.com/yii2-extensions/soft-delete/blob/main/docs/testing.md)
 
+The guides and the [API reference](https://yii2-framework.github.io/docs/extensions/soft-delete/reference/) generated
+from the PHPDoc in `src/` are available at <https://yii2-framework.github.io/docs/extensions/soft-delete/>.
+
 ## AI assistance
 
 AI agents: read the [documentation index](https://yii2-framework.github.io/docs/llms.txt) and fetch the Markdown version
@@ -170,11 +173,14 @@ of a page by appending `index.md` to its URL. The
 [AI agents guide](https://yii2-framework.github.io/docs/project/ai-agents/) covers skill installation, client setup and
 verification.
 
+- 🤖 [`yii2-soft-delete` skill](https://github.com/yii2-extensions/soft-delete/blob/main/docs/agents.md): deletion markers,
+  query scopes, restoration, and foreign-key fallback.
 - 🧭 [`yii2-framework` skill](https://yii2-framework.github.io/docs/guide/skills/yii2-framework/): Yii 22.0 application
   conventions.
 
 The hosted documentation covers Yii 22.0. If it does not match the installed revision or is unavailable, use the
-[repository guides](#documentation), the source PHPDoc and the [changelog](CHANGELOG.md).
+[repository guides](#documentation), the [skill source](skills/yii2-soft-delete/SKILL.md), the source PHPDoc and the
+[changelog](CHANGELOG.md).
 
 ## Package information
 
