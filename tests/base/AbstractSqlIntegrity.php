@@ -14,6 +14,7 @@ use yii\db\oci\Schema as OracleSchema;
 use yii2\extensions\softdelete\{DeleteBehavior,ScopedQuery};
 use yii2\extensions\softdelete\tests\data\SqlProbeRecord;
 use yii2\extensions\softdelete\tests\support\DatabaseConnection;
+
 use function is_int;
 use function is_string;
 
